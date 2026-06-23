@@ -1,0 +1,9 @@
+# Variables d'environnement — ne jamais commit
+.env
+
+# Données persistantes (volumes locaux si dev)
+data/
+
+# OS
+.DS_Store
+Thumbs.db
