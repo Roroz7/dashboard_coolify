@@ -1,0 +1,98 @@
+groups:
+  - name: vps_alerts
+    interval: 30s
+    rules:
+
+      # ── CPU ──────────────────────────────────────────────────────────────
+      - alert: CPUUsageHigh
+        expr: |
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU élevé sur {{ $labels.instance }}"
+          description: "CPU à {{ $value | printf \"%.1f\" }}% depuis 5 min."
+
+      - alert: CPUUsageCritical
+        expr: |
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CPU critique sur {{ $labels.instance }}"
+          description: "CPU à {{ $value | printf \"%.1f\" }}% — intervention requise."
+
+      # ── RAM ──────────────────────────────────────────────────────────────
+      - alert: MemoryUsageHigh
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAM élevée sur {{ $labels.instance }}"
+          description: "RAM utilisée à {{ $value | printf \"%.1f\" }}%."
+
+      - alert: MemoryUsageCritical
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RAM critique sur {{ $labels.instance }}"
+          description: "RAM utilisée à {{ $value | printf \"%.1f\" }}%."
+
+      # ── DISQUE ───────────────────────────────────────────────────────────
+      - alert: DiskUsageHigh
+        expr: |
+          (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs"})) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disque plein sur {{ $labels.instance }}"
+          description: "Partition {{ $labels.mountpoint }} à {{ $value | printf \"%.1f\" }}%."
+
+      - alert: DiskUsageCritical
+        expr: |
+          (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs"})) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disque critique sur {{ $labels.instance }}"
+          description: "Partition {{ $labels.mountpoint }} à {{ $value | printf \"%.1f\" }}%."
+
+      # ── RÉSEAU ───────────────────────────────────────────────────────────
+      - alert: NetworkReceiveHigh
+        expr: |
+          rate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*"}[5m]) / 1024 / 1024 > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Trafic entrant élevé sur {{ $labels.instance }}"
+          description: "{{ $value | printf \"%.1f\" }} MB/s reçus sur {{ $labels.device }}."
+
+      # ── UPTIME ───────────────────────────────────────────────────────────
+      - alert: NodeDown
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "VPS inaccessible !"
+          description: "{{ $labels.instance }} ne répond plus depuis 1 min."
+
+      # ── LOAD AVERAGE ─────────────────────────────────────────────────────
+      - alert: LoadAverageHigh
+        expr: node_load15 / count by(instance) (node_cpu_seconds_total{mode="idle"}) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Load average élevé sur {{ $labels.instance }}"
+          description: "Load15 à {{ $value | printf \"%.2f\" }} par cœur."

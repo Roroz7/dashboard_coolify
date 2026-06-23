@@ -8,29 +8,15 @@ volumes:
   prometheus_data:
   grafana_data:
 
-# ─────────────────────────────────────────
-# CONFIGS — fichiers montés en lecture seule
-# Docker garantit que ce sont des fichiers, pas des dossiers
-# ─────────────────────────────────────────
-configs:
-  prometheus_config:
-    file: ./prometheus/prometheus.yml
-  prometheus_alerts:
-    file: ./prometheus/alerts.yml
-  alertmanager_config:
-    file: ./prometheus/alertmanager.yml
-  grafana_datasource:
-    file: ./grafana/provisioning/datasources/prometheus.yml
-  grafana_dashboards_provider:
-    file: ./grafana/provisioning/dashboards/dashboards.yml
-
 services:
 
   # ─────────────────────────────────────────
-  # PROMETHEUS
+  # PROMETHEUS — image buildée avec config incluse
   # ─────────────────────────────────────────
   prometheus:
-    image: prom/prometheus:v2.51.2
+    build:
+      context: ./docker/prometheus
+      dockerfile: Dockerfile
     container_name: prometheus
     restart: unless-stopped
     command:
@@ -40,11 +26,6 @@ services:
       - "--web.console.libraries=/etc/prometheus/console_libraries"
       - "--web.console.templates=/etc/prometheus/consoles"
       - "--web.enable-lifecycle"
-    configs:
-      - source: prometheus_config
-        target: /etc/prometheus/prometheus.yml
-      - source: prometheus_alerts
-        target: /etc/prometheus/alerts.yml
     volumes:
       - prometheus_data:/prometheus
     networks:
@@ -53,7 +34,7 @@ services:
       - "19090:9090"
 
   # ─────────────────────────────────────────
-  # NODE EXPORTER
+  # NODE EXPORTER — pas de config à monter, pas de problème
   # ─────────────────────────────────────────
   node-exporter:
     image: prom/node-exporter:v1.7.0
@@ -75,7 +56,7 @@ services:
       - "19100:9100"
 
   # ─────────────────────────────────────────
-  # CADVISOR
+  # CADVISOR — pas de config à monter
   # ─────────────────────────────────────────
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
@@ -96,28 +77,29 @@ services:
       - "18080:8080"
 
   # ─────────────────────────────────────────
-  # ALERTMANAGER
+  # ALERTMANAGER — image buildée avec config incluse
   # ─────────────────────────────────────────
   alertmanager:
-    image: prom/alertmanager:v0.27.0
+    build:
+      context: ./docker/alertmanager
+      dockerfile: Dockerfile
     container_name: alertmanager
     restart: unless-stopped
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
       - "--storage.path=/alertmanager"
-    configs:
-      - source: alertmanager_config
-        target: /etc/alertmanager/alertmanager.yml
     networks:
       - monitoring
     ports:
       - "19093:9093"
 
   # ─────────────────────────────────────────
-  # GRAFANA
+  # GRAFANA — image buildée avec provisioning + dashboards inclus
   # ─────────────────────────────────────────
   grafana:
-    image: grafana/grafana:10.4.2
+    build:
+      context: ./docker/grafana
+      dockerfile: Dockerfile
     container_name: grafana
     restart: unless-stopped
     environment:
@@ -130,15 +112,8 @@ services:
       - GF_ANALYTICS_REPORTING_ENABLED=false
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-piechart-panel
-    configs:
-      - source: grafana_datasource
-        target: /etc/grafana/provisioning/datasources/prometheus.yml
-      - source: grafana_dashboards_provider
-        target: /etc/grafana/provisioning/dashboards/dashboards.yml
     volumes:
       - grafana_data:/var/lib/grafana
-      # Le dashboard JSON reste en volume classique (pas de problème car c'est un dossier)
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
       - monitoring
     ports:

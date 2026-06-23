@@ -1,0 +1,57 @@
+global:
+  scrape_interval: 15s       # fréquence de collecte
+  evaluation_interval: 15s   # fréquence d'évaluation des règles
+  scrape_timeout: 10s
+
+# Chargement des règles d'alertes
+rule_files:
+  - "alerts.yml"
+
+# Connexion à Alertmanager
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# ─────────────────────────────────────────
+# SCRAPE CONFIGS
+# ─────────────────────────────────────────
+scrape_configs:
+
+  # Prometheus lui-même
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          instance: "prometheus"
+
+  # Métriques système du VPS (CPU, RAM, disque, réseau)
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          instance: "vps-ovh"
+          env: "production"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - target_label: __address__
+        replacement: node-exporter:9100
+
+  # Métriques des conteneurs Docker
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels:
+          instance: "docker-containers"
+    metric_relabel_configs:
+      # Garde uniquement les métriques utiles pour alléger la DB
+      - source_labels: [__name__]
+        regex: "container_(cpu_usage_seconds_total|memory_usage_bytes|network_receive_bytes_total|network_transmit_bytes_total|fs_reads_bytes_total|fs_writes_bytes_total)"
+        action: keep
+
+  # Alertmanager
+  - job_name: "alertmanager"
+    static_configs:
+      - targets: ["alertmanager:9093"]
