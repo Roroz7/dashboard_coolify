@@ -8,10 +8,26 @@ volumes:
   prometheus_data:
   grafana_data:
 
+# ─────────────────────────────────────────
+# CONFIGS — fichiers montés en lecture seule
+# Docker garantit que ce sont des fichiers, pas des dossiers
+# ─────────────────────────────────────────
+configs:
+  prometheus_config:
+    file: ./prometheus/prometheus.yml
+  prometheus_alerts:
+    file: ./prometheus/alerts.yml
+  alertmanager_config:
+    file: ./prometheus/alertmanager.yml
+  grafana_datasource:
+    file: ./grafana/provisioning/datasources/prometheus.yml
+  grafana_dashboards_provider:
+    file: ./grafana/provisioning/dashboards/dashboards.yml
+
 services:
 
   # ─────────────────────────────────────────
-  # PROMETHEUS — collecte toutes les métriques
+  # PROMETHEUS
   # ─────────────────────────────────────────
   prometheus:
     image: prom/prometheus:v2.51.2
@@ -24,19 +40,20 @@ services:
       - "--web.console.libraries=/etc/prometheus/console_libraries"
       - "--web.console.templates=/etc/prometheus/consoles"
       - "--web.enable-lifecycle"
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+      - source: prometheus_alerts
+        target: /etc/prometheus/alerts.yml
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     networks:
       - monitoring
     ports:
       - "19090:9090"
-    labels:
-      - "coolify.managed=true"
 
   # ─────────────────────────────────────────
-  # NODE EXPORTER — métriques système (CPU, RAM, disque, réseau)
+  # NODE EXPORTER
   # ─────────────────────────────────────────
   node-exporter:
     image: prom/node-exporter:v1.7.0
@@ -58,7 +75,7 @@ services:
       - "19100:9100"
 
   # ─────────────────────────────────────────
-  # CADVISOR — métriques des conteneurs Docker
+  # CADVISOR
   # ─────────────────────────────────────────
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
@@ -79,7 +96,7 @@ services:
       - "18080:8080"
 
   # ─────────────────────────────────────────
-  # ALERTMANAGER — gestion des alertes (email, Telegram, Discord)
+  # ALERTMANAGER
   # ─────────────────────────────────────────
   alertmanager:
     image: prom/alertmanager:v0.27.0
@@ -88,15 +105,16 @@ services:
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
       - "--storage.path=/alertmanager"
-    volumes:
-      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    configs:
+      - source: alertmanager_config
+        target: /etc/alertmanager/alertmanager.yml
     networks:
       - monitoring
     ports:
       - "19093:9093"
 
   # ─────────────────────────────────────────
-  # GRAFANA — visualisation & dashboards
+  # GRAFANA
   # ─────────────────────────────────────────
   grafana:
     image: grafana/grafana:10.4.2
@@ -112,9 +130,14 @@ services:
       - GF_ANALYTICS_REPORTING_ENABLED=false
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-piechart-panel
+    configs:
+      - source: grafana_datasource
+        target: /etc/grafana/provisioning/datasources/prometheus.yml
+      - source: grafana_dashboards_provider
+        target: /etc/grafana/provisioning/dashboards/dashboards.yml
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # Le dashboard JSON reste en volume classique (pas de problème car c'est un dossier)
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
       - monitoring
@@ -122,5 +145,3 @@ services:
       - "3001:3001"
     depends_on:
       - prometheus
-    labels:
-      - "coolify.managed=true"
